@@ -1,7 +1,8 @@
 {
   "name": "Timeline Visualizer",
   "short_name": "Timeline",
-  "description": "Create a private travel animation from a Google Maps Timeline export.",
+  "description": "在瀏覽器本機將 Google 地圖 Timeline 製作成旅程動畫。",
+  "lang": "zh-Hant",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#fff7fa",

@@ -1,66 +1,46 @@
-# Timeline Visualizer for iPhone and the web
+# Timeline Visualizer Web
 
-This is the browser version of Timeline Visualizer. It loads a Google Maps
-`Timeline.json` export, renders the selected journey, and creates an H.264 MP4
-entirely in the browser.
+把 Google 地圖匯出的 `Timeline.json`，直接在瀏覽器中製作成 Timeline Visualizer Android App 風格的旅程動畫與 H.264 MP4。
 
-## Privacy
+## 重點功能
 
-- The Timeline JSON is read locally and is not uploaded.
-- No account, location permission, or broad file permission is used.
-- The public site uses Cloudflare Web Analytics for aggregate site traffic. The
-  application does not add Timeline contents, coordinates, selected dates,
-  titles, or generated media to analytics events.
-- CARTO receives requests for the map tiles needed to render the selected route.
-- The browser tab must remain open while video creation is running.
+- JSON、座標、標題與影片全程留在目前瀏覽器分頁，不上傳到應用程式伺服器。
+- 支援新版直接陣列與 `semanticSegments` Timeline JSON。
+- 依 Android App v2.2.5 的動畫規則呈現：長途節奏壓縮、三層動態尾跡、平穩／固定／動態鏡頭，以及 1.5 秒完整旅程結尾。
+- 距離單位可設為自動、公里或英里，摘要、預覽與輸出影片會一致套用。
+- 正方形 480p／720p／1080p、直式 1080×1920、橫式 1920×1080。
+- 完整時長預覽、時間軸拖曳、暫停／繼續、10–300 秒影片。
+- 保守 GPS 異常點篩選；不修改原始 JSON。
+- 使用 WebCodecs 與 Mediabunny，在瀏覽器內建立 MP4。
 
-## Browser support
+## 隱私
 
-Video creation requires the WebCodecs API and H.264 encoding. The primary target
-is Safari 16.4 or newer on iPhone. The app detects browsers without WebCodecs and
-disables video creation while leaving Timeline loading available.
+Timeline 檔案不會送出此裝置。只有在使用者明確同意後，網站才會向 CARTO 請求旅程範圍的 OpenStreetMap 圖磚；圖磚座標可能讓 CARTO 推知被瀏覽的地理區域。完整說明見網站內的「隱私說明」。
 
-## Local development
+## 本機開發
+
+需要 Node.js 24 與 pnpm 11。
 
 ```bash
-cd web
 pnpm install --frozen-lockfile
 pnpm test
-pnpm build
 pnpm dev
 ```
 
-The Vite base path targets the default GitHub Pages project URL at
-`/google-timeline-visualizer/`.
+正式建置：
 
-The production deployment is available at
-<https://ahn-lab.org/google-timeline-visualizer/>. The Pages workflow builds and
-deploys this directory from `main`. Keep the project base path unchanged unless
-a dedicated custom subdomain is configured at the same time.
+```bash
+pnpm build
+```
 
-Set `VITE_PREVIEW=true` when building a public test deployment. Preview builds
-show a visible warning.
+## GitHub Pages
 
-## Current web app scope
+`.github/workflows/pages.yml` 會在 `main` 分支更新時測試、建置並部署 `dist/`，並在第一次部署時啟用 GitHub Pages。
 
-The current implementation supports the complete private browser path.
+Vite 使用相對資產路徑，因此不論儲存庫名稱為何，都能部署到 `https://<使用者>.github.io/<儲存庫>/`。
 
-1. Load current direct-array or older `semanticSegments` Timeline JSON, with an
-   optional warned fallback for raw-only location exports.
-   A built-in fictional journey is available for privacy-safe device testing.
-2. Read absolute path timestamps or current minute offsets from segment start.
-   When timezone data is absent, preserve the exported route order and recorded
-   calendar dates so date-line travel is not reordered by the browser timezone.
-3. Choose a month range or exact dates, title, and duration.
-4. Choose Fixed zoom, Steady following, or Dynamic following camera movement.
-5. Require explicit acknowledgement before contacting CARTO for map tiles.
-6. Preview the journey on a 480 by 480 Canvas.
-7. Add the Android-style 1.5-second full-route ending, encode Canvas frames as
-   H.264, and mux them into an MP4.
-8. Keep the screen awake when supported and allow video creation to be cancelled.
-9. Preview, share, or download the completed MP4.
+## 來源與授權
 
-The browser layout, animated preview, encoded sample output, and camera following
-were validated at an iPhone-sized viewport and on a physical iPhone. Longer
-exports still benefit from representative-device memory, thermal, interruption,
-and foreground execution testing.
+本專案以 [mahlernim/google-timeline-visualizer](https://github.com/mahlernim/google-timeline-visualizer) v2.2.5 為基礎，並將 Android App 的動畫與輸出行為移植到網頁環境。原專案採 MIT License；請保留 [LICENSE](./LICENSE) 與 [NOTICE.md](./NOTICE.md)。Mediabunny 與其他第三方資訊見 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
+
+地圖與輸出影片中的 attribution 必須保留：© OpenStreetMap contributors、© CARTO。

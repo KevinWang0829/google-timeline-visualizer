@@ -1,158 +1,205 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#fff7fa" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="description" content="Create a travel animation privately from a Google Maps Timeline export." />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="description" content="在瀏覽器本機將 Google 地圖 Timeline JSON 製作成 App 同款旅程動畫。" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <title>Timeline Visualizer</title>
   </head>
   <body>
     <main class="shell">
-      <p id="preview-banner" class="preview-banner hidden">iPhone preview build · Test with non-sensitive sample data first</p>
+      <p id="preview-banner" class="preview-banner hidden">測試版本 · 請先使用不含敏感資訊的資料</p>
+
       <header class="app-header">
-        <h1>Create video</h1>
+        <div>
+          <p class="eyebrow">Timeline Visualizer</p>
+          <h1>建立影片</h1>
+        </div>
+        <span class="app-badge" aria-label="使用 App 動畫核心">App 效果</span>
       </header>
 
       <section class="card intro">
-        <h2>Timeline file</h2>
-        <p>Choose your exported Timeline.json. The file stays on this device, and only map images are requested from the map provider.</p>
+        <div class="section-heading">
+          <h2>Timeline 檔案</h2>
+          <span class="local-pill">只在此裝置處理</span>
+        </div>
+        <p>選擇從 Google 地圖匯出的 <strong>Timeline.json</strong>。檔案不會上傳，也不會儲存在網站。</p>
         <details class="help-panel">
-          <summary>How to export Timeline on iPhone</summary>
+          <summary>如何匯出 Timeline</summary>
           <ol>
-            <li>Open Google Maps and tap your profile picture.</li>
-            <li>Open Settings, then Personal content.</li>
-            <li>Select Export Timeline data.</li>
-            <li>Save Timeline.json in the Files app, then return here.</li>
+            <li>開啟 Google 地圖，點選個人資料相片。</li>
+            <li>前往「設定」→「個人內容」。</li>
+            <li>選擇「匯出 Timeline 資料」。</li>
+            <li>回到這裡選取匯出的 JSON 檔。</li>
           </ol>
-          <p>To keep this app on your iPhone, use Safari’s Share menu and choose Add to Home Screen.</p>
         </details>
         <div class="source-actions">
           <label class="file-button">
-            <span>Choose Timeline.json</span>
+            <span>選擇 Timeline.json</span>
             <input id="timeline-file" type="file" accept="application/json,.json" />
           </label>
-          <button id="sample-button" class="secondary" type="button">Try a fictional sample journey</button>
+          <button id="sample-button" class="secondary" type="button">試用虛構旅程</button>
         </div>
-        <p id="file-status" class="status" role="status">No Timeline loaded</p>
-        <p id="compatibility-status" class="status">Checking video support…</p>
+        <div id="loading-row" class="loading-row hidden" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="loading-stage">正在讀取 Timeline…</span>
+        </div>
+        <p id="file-status" class="status" role="status">尚未載入 Timeline</p>
+        <p id="compatibility-status" class="status">正在檢查影片輸出支援…</p>
       </section>
 
       <section id="settings-card" class="card hidden" aria-labelledby="settings-heading">
-        <h2 id="settings-heading">Create your journey</h2>
-        <label id="raw-signals-row" class="checkbox-row hidden">
-          <input id="raw-signals-toggle" type="checkbox" />
-          <span>Use raw location data</span>
-        </label>
-        <p id="raw-signals-description" class="status hidden">Uses recent unprocessed location estimates. Noise is reduced, but the route and distance may still be inaccurate.</p>
-        <label id="raw-accuracy-field" class="hidden">
-          Accuracy limit (meters)
-          <input id="raw-accuracy-limit" type="number" min="0" step="1" inputmode="decimal" value="100" />
-          <span class="field-help">Less accurate locations are excluded. Leave blank to include every usable location.</span>
-        </label>
-        <div id="period-controls">
-          <label class="checkbox-row">
-            <input id="exact-date-toggle" type="checkbox" />
-            <span>Select exact dates</span>
+        <h2 id="settings-heading">選擇期間</h2>
+        <div id="month-range-fields" class="field-grid">
+          <label>
+            開始月份
+            <select id="start-month"></select>
           </label>
-          <div id="month-range-fields" class="field-grid">
-            <label>
-              From
-              <select id="start-month"></select>
-            </label>
-            <label>
-              To
-              <select id="end-month"></select>
-            </label>
-          </div>
-          <div id="exact-date-fields" class="field-grid hidden">
-            <label>
-              Start date
-              <input id="start-date" type="date" />
-            </label>
-            <label>
-              End date
-              <input id="end-date" type="date" />
-            </label>
-          </div>
+          <label>
+            結束月份
+            <select id="end-month"></select>
+          </label>
         </div>
-        <label>
-          Video title
-          <input id="video-title" type="text" maxlength="80" value="My Journey" />
+        <label class="switch-row">
+          <span>
+            <strong>選擇確切日期</strong>
+            <small>需要只顯示某幾天時開啟</small>
+          </span>
+          <input id="exact-date-toggle" type="checkbox" role="switch" />
         </label>
+        <div id="exact-date-fields" class="field-grid hidden">
+          <label>
+            開始日期
+            <input id="start-date" type="date" />
+          </label>
+          <label>
+            結束日期
+            <input id="end-date" type="date" />
+          </label>
+        </div>
+        <p id="selection-summary" class="status summary-line"></p>
+
+        <div class="section-divider"></div>
+        <h2>影片細節</h2>
         <label>
-          Duration
-          <select id="duration">
-            <option value="10" selected>10 seconds</option>
-            <option value="15">15 seconds</option>
-            <option value="20">20 seconds</option>
-            <option value="30">30 seconds</option>
-            <option value="45">45 seconds</option>
-            <option value="60">60 seconds</option>
-          </select>
+          影片標題
+          <input id="video-title" type="text" maxlength="80" value="我的旅程" />
         </label>
-        <label>
-          Camera movement
-          <select id="camera-movement">
-            <option value="fixed">Fixed zoom</option>
-            <option value="steady" selected>Steady following</option>
-            <option value="dynamic">Dynamic following</option>
-          </select>
+        <div class="field-grid">
+          <label>
+            動畫長度
+            <select id="duration">
+              <option value="10">10 秒</option>
+              <option value="15">15 秒</option>
+              <option value="20">20 秒</option>
+              <option value="30" selected>30 秒</option>
+              <option value="45">45 秒</option>
+              <option value="60">60 秒</option>
+              <option value="custom">自訂</option>
+            </select>
+          </label>
+          <label>
+            影片格式
+            <select id="video-format">
+              <option value="standard" selected>正方形 · 480p</option>
+              <option value="high">正方形 · 720p</option>
+              <option value="ultra">正方形 · 1080p</option>
+              <option value="portrait">直式 · 1080×1920</option>
+              <option value="landscape">橫式 · 1920×1080</option>
+            </select>
+          </label>
+        </div>
+        <label id="custom-duration-field" class="hidden">
+          自訂秒數（10–300）
+          <input id="custom-duration" type="number" inputmode="numeric" min="10" max="300" step="1" value="90" />
         </label>
-        <p id="selection-summary" class="status"></p>
+        <p id="duration-warning" class="status warning hidden">較長或高解析度影片會需要更多時間與記憶體，請保持此頁開啟。</p>
+
+        <details class="advanced-panel">
+          <summary>
+            <span><strong>進階設定</strong><small>距離單位、鏡頭、長途節奏與 GPS 異常點</small></span>
+          </summary>
+          <label>
+            距離單位
+            <select id="distance-unit">
+              <option value="automatic" selected>自動</option>
+              <option value="kilometers">公里</option>
+              <option value="miles">英里</option>
+            </select>
+          </label>
+          <label>
+            鏡頭移動
+            <select id="camera-movement">
+              <option value="fixed">固定</option>
+              <option value="steady" selected>平穩</option>
+              <option value="dynamic">動態</option>
+            </select>
+          </label>
+          <label>
+            長途行程壓縮
+            <select id="long-trip-compression">
+              <option value="off">關閉 · 1.00</option>
+              <option value="gentle">溫和 · 0.92</option>
+              <option value="balanced" selected>平衡 · 0.85</option>
+              <option value="strong">強 · 0.75</option>
+            </select>
+          </label>
+          <label class="switch-row compact">
+            <span>
+              <strong>GPS 異常點篩選</strong>
+              <small id="outlier-summary">保守忽略不可能的短時間往返</small>
+            </span>
+            <input id="outlier-filter" type="checkbox" role="switch" checked />
+          </label>
+        </details>
+
         <div class="privacy-notice">
-          <strong>Before loading the map</strong>
-          <p>Your Timeline file is never uploaded. CARTO receives the tile coordinates for map areas in the selected journey, along with normal network information such as your IP address. This may reveal places in your Timeline to CARTO.</p>
+          <strong>載入地圖前</strong>
+          <p>Timeline JSON 不會離開此裝置。CARTO 只會收到旅程範圍所需的地圖圖磚座標與一般網路資訊，因此可能推知你瀏覽的區域。</p>
           <label class="checkbox-row">
             <input id="map-consent" type="checkbox" />
-            <span>I understand and want to load the map</span>
+            <span>我了解並同意載入地圖</span>
           </label>
-          <a href="https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/privacy-web.md" target="_blank" rel="noopener noreferrer">Read the web app privacy policy</a>
+          <a href="./privacy.html" target="_blank" rel="noopener noreferrer">閱讀隱私說明</a>
         </div>
         <p id="settings-error" class="error hidden" role="alert"></p>
         <div class="actions">
-          <button id="preview-button" class="secondary" type="button">Preview</button>
-          <button id="create-button" type="button" disabled>Create MP4</button>
+          <button id="preview-button" class="secondary" type="button">預覽</button>
+          <button id="create-button" type="button" disabled>建立 MP4</button>
         </div>
       </section>
 
-      <section id="preview-card" class="card hidden" aria-labelledby="preview-heading">
+      <section id="preview-card" class="card preview-card hidden" aria-labelledby="preview-heading">
         <div class="section-heading">
-          <h2 id="preview-heading">Preview</h2>
-          <span id="progress-label">Ready</span>
+          <h2 id="preview-heading">旅程</h2>
+          <span id="progress-label">準備就緒</span>
         </div>
-        <canvas id="journey-canvas" width="480" height="480"></canvas>
+        <div class="canvas-frame">
+          <canvas id="journey-canvas" width="480" height="480"></canvas>
+        </div>
+        <input id="timeline-seek" class="timeline-seek" type="range" min="0" max="1000" value="0" aria-label="播放位置" />
         <progress id="export-progress" class="hidden" value="0" max="1"></progress>
-        <button id="cancel-button" class="secondary cancel-button hidden" type="button">Cancel video creation</button>
+        <button id="cancel-button" class="secondary cancel-button hidden" type="button">取消建立影片</button>
         <p id="error-message" class="error hidden" role="alert"></p>
         <video id="result-video" class="hidden" controls playsinline></video>
         <div id="result-actions" class="actions hidden">
-          <button id="share-button" type="button">Share video</button>
-          <a id="download-link" class="button secondary" download="timeline-journey.mp4">Download MP4</a>
+          <button id="share-button" type="button">分享影片</button>
+          <a id="download-link" class="button secondary" download="timeline-journey.mp4">下載 MP4</a>
         </div>
       </section>
 
       <footer>
-        <p>No account, location permission, or Timeline upload is required.</p>
-        <p>Map data © OpenStreetMap contributors and © CARTO.</p>
-        <p><a href="./third-party-notices.txt">Third-party notices</a></p>
+        <p>不需要帳號、位置權限或上傳 Timeline。</p>
+        <p>地圖資料 © OpenStreetMap 貢獻者、© CARTO。</p>
+        <p><a href="./third-party-notices.txt">第三方授權</a> · <a href="https://github.com/mahlernim/google-timeline-visualizer" rel="noopener noreferrer">原始 App 專案</a></p>
       </footer>
     </main>
-    <dialog id="raw-only-dialog" aria-labelledby="raw-only-heading">
-      <form method="dialog" class="dialog-card">
-        <h2 id="raw-only-heading">Only raw location data found</h2>
-        <p>This file contains raw location data but no processed visits or trips. You can continue, but the route may be noisy or incomplete, and its distance will only be an estimate.</p>
-        <p>For better results, open Google Maps, confirm or restore your Timeline, and make sure your visits and trips appear. Then export your Timeline again and load the new file in this app.</p>
-        <div class="dialog-actions">
-          <button id="open-google-maps" type="button">Open Google Maps</button>
-          <button id="continue-raw-data" class="secondary" type="button">Continue with raw data</button>
-        </div>
-      </form>
-    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
