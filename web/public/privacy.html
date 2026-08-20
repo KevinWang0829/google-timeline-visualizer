@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="theme-color" content="#fff7fa" />
+    <title>隱私說明 · Timeline Visualizer</title>
+    <style>
+      :root { color: #24191d; background: #fff7fa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif; }
+      body { margin: 0; }
+      main { width: min(100% - 36px, 720px); margin: 0 auto; padding: 42px 0 64px; }
+      h1 { margin: 0 0 8px; font-size: clamp(34px, 8vw, 52px); letter-spacing: -.04em; }
+      h2 { margin-top: 30px; font-size: 21px; }
+      p, li { color: #5c4b52; line-height: 1.7; }
+      .summary { padding: 18px; border-radius: 20px; background: #fff; box-shadow: 0 9px 28px rgba(74,38,52,.055); }
+      a { color: #8d003d; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p><a href="./">← 返回 Timeline Visualizer</a></p>
+      <h1>隱私說明</h1>
+      <p>更新日期：2026 年 8 月 20 日</p>
+      <p class="summary"><strong>重點：</strong>你選擇的 Timeline JSON、座標、日期、標題、影片畫面與 MP4 都只在目前瀏覽器分頁中處理，不會上傳到本站或應用程式伺服器。</p>
+
+      <h2>Timeline 資料</h2>
+      <p>網站只讀取你主動選擇的 JSON 檔，不會要求 Google 帳號、裝置位置、聯絡人、相片或廣泛檔案權限。重新整理或關閉分頁後，載入中的 Timeline 資料會從頁面記憶體移除。</p>
+
+      <h2>地圖請求</h2>
+      <p>只有在你勾選同意後，網站才會向 CARTO 請求 OpenStreetMap 地圖圖磚。請求包含縮放層級與地圖格座標，以及 IP 位址、瀏覽器資訊等一般網路資料；這可能讓 CARTO 推知你所瀏覽的地理區域。網站不會把完整路線、JSON、標題或影片傳給 CARTO。</p>
+
+      <h2>儲存與分析</h2>
+      <p>網站不把 Timeline 寫入 localStorage、IndexedDB 或服務工作者快取，也不加入分析追蹤或遠端錯誤記錄。服務工作者只可能快取網站本身的靜態檔案。產生的影片在目前分頁以暫時 Blob URL 提供下載或分享。</p>
+
+      <h2>GitHub Pages</h2>
+      <p>網站由 GitHub Pages 託管。一般網頁請求仍會向 GitHub 暴露 IP 位址、瀏覽器資訊、請求時間等標準網路資料；詳情請參閱 <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener noreferrer">GitHub 隱私權聲明</a>。</p>
+
+      <h2>第三方</h2>
+      <ul>
+        <li><a href="https://carto.com/privacy/" rel="noopener noreferrer">CARTO Privacy Notice</a></li>
+        <li><a href="https://osmfoundation.org/wiki/Privacy_Policy" rel="noopener noreferrer">OpenStreetMap Privacy Policy</a></li>
+      </ul>
+    </main>
+  </body>
+</html>

@@ -1,3 +1,5 @@
+import type { JourneyTiming, LongTripCompression } from './journey-timing';
+
 export interface GeoPoint {
   instant: Date;
   latitude: number;
@@ -46,9 +48,16 @@ export interface TimelineFrame {
 export interface PreparedJourney {
   points: GeoPoint[];
   worldPoints: WorldPoint[];
+  renderWorldPoints: WorldPoint[];
+  renderCumulativeDistanceKm: number[];
   overviewRouteSegments: WorldPoint[][];
   cumulativeDistanceKm: number[];
   totalDistanceKm: number;
+  timing: JourneyTiming;
+  longTripCompression: LongTripCompression;
+  journeyDurationSeconds: number;
+  renderWidth: number;
+  renderHeight: number;
   cameraTrack: CameraTrack;
   overviewViewport: Viewport;
   tiles: Map<string, HTMLImageElement>;

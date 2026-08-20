@@ -1,29 +1,34 @@
 import { BufferTarget, CanvasSource, Mp4OutputFormat, Output, Quality } from 'mediabunny';
 import { frameAtElapsedSeconds, OUTRO_SECONDS } from './animation';
+import type { DistanceUnit } from './distance-unit';
 import { drawFrame } from './renderer';
 import type { PreparedJourney } from './types';
+import { VIDEO_FORMATS } from './video-formats';
+import type { VideoFormat } from './video-formats';
 
 export interface ExportOptions {
   durationSeconds: number;
   title: string;
   periodLabel: string;
+  distanceUnit: DistanceUnit;
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
+  format?: VideoFormat;
 }
 
 export function hasVideoEncoder(): boolean {
   return typeof globalThis.VideoEncoder !== 'undefined';
 }
 
-export async function canCreateMp4(width = 480, height = 480): Promise<boolean> {
+export async function canCreateMp4(format: VideoFormat = VIDEO_FORMATS.standard): Promise<boolean> {
   if (!hasVideoEncoder()) return false;
   try {
     const result = await VideoEncoder.isConfigSupported({
-      codec: 'avc1.42001f',
-      width,
-      height,
-      bitrate: 2_500_000,
-      framerate: 24,
+      codec: format.codec,
+      width: format.width,
+      height: format.height,
+      bitrate: format.bitrate,
+      framerate: format.frameRate,
       hardwareAcceleration: 'no-preference',
     });
     return result.supported === true;
@@ -44,10 +49,14 @@ export async function createJourneyMp4(
   options: ExportOptions,
 ): Promise<Blob> {
   if (!hasVideoEncoder()) {
-    throw new Error('This browser cannot create MP4 video. Use Safari 16.4 or newer.');
+    throw new Error('這個瀏覽器無法建立 MP4。請使用 Safari 16.4 或更新版本。');
   }
 
-  const fps = 24;
+  const format = options.format ?? VIDEO_FORMATS.standard;
+  if (canvas.width !== format.width || canvas.height !== format.height) {
+    throw new Error(`影片畫布必須是 ${format.width}×${format.height}。`);
+  }
+  const fps = format.frameRate;
   const frameDuration = 1 / fps;
   const journeyFrameCount = Math.max(1, Math.round(options.durationSeconds * fps));
   const outroFrameCount = Math.round(OUTRO_SECONDS * fps);
@@ -59,8 +68,8 @@ export async function createJourneyMp4(
   });
   const source = new CanvasSource(canvas, {
     codec: 'avc',
-    fullCodecString: 'avc1.42001f',
-    quality: new Quality({ bitrate: 2_500_000 }),
+    fullCodecString: format.codec,
+    quality: new Quality({ bitrate: format.bitrate }),
     keyFrameInterval: 1,
     hardwareAcceleration: 'no-preference',
   });
@@ -82,13 +91,20 @@ export async function createJourneyMp4(
         options.durationSeconds + (frame - journeyFrameCount) / fps,
         options.durationSeconds,
       );
-    drawFrame(canvas, journey, animationFrame, options.title, options.periodLabel);
+    drawFrame(
+      canvas,
+      journey,
+      animationFrame,
+      options.title,
+      options.periodLabel,
+      options.distanceUnit,
+    );
     await source.add(frame * frameDuration, frameDuration, { keyFrame: frame % fps === 0 });
     options.onProgress?.((frame + 1) / frameCount);
   }
 
   await output.finalize();
-  if (!target.buffer) throw new Error('The video encoder did not produce an MP4 file.');
-  if (!isMp4(target.buffer)) throw new Error('The video encoder produced an invalid MP4 file.');
+  if (!target.buffer) throw new Error('影片編碼器沒有產生 MP4 檔案。');
+  if (!isMp4(target.buffer)) throw new Error('影片編碼器產生了無效的 MP4 檔案。');
   return new Blob([target.buffer], { type: 'video/mp4' });
 }

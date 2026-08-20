@@ -39,14 +39,14 @@ describe('camera track', () => {
   ]);
 
   it.each<CameraMovement>(['fixed', 'steady', 'dynamic'])('%s follows the journey instead of freezing', (movement) => {
-    const track = buildCameraTrack(koreanJourney, 480, movement);
+    const track = buildCameraTrack(koreanJourney, 480, 480, movement);
     const [startX, startY] = center(cameraViewportAt(track, 0));
     const [endX, endY] = center(cameraViewportAt(track, 1));
     expect(Math.hypot(endX - startX, endY - startY)).toBeGreaterThan(0.001);
   });
 
   it('keeps the marker inside the stable central area', () => {
-    const track = buildCameraTrack(koreanJourney, 480, 'dynamic');
+    const track = buildCameraTrack(koreanJourney, 480, 480, 'dynamic');
     for (let sample = 0; sample <= 40; sample += 1) {
       const progress = sample / 40;
       const viewport = cameraViewportAt(track, progress);
@@ -61,7 +61,7 @@ describe('camera track', () => {
   });
 
   it('keeps one zoom span in fixed mode while continuing to pan', () => {
-    const track = buildCameraTrack(koreanJourney, 480, 'fixed');
+    const track = buildCameraTrack(koreanJourney, 480, 480, 'fixed');
     const spans = [0, 0.2, 0.5, 0.8, 1].map((progress) => {
       const viewport = cameraViewportAt(track, progress);
       return viewport.maxY - viewport.minY;
@@ -71,7 +71,7 @@ describe('camera track', () => {
 
   it('uses the short camera path and wrapped tiles across the date line', () => {
     const dateLineJourney = journey([[10, 179], [10.2, -179]]);
-    const track = buildCameraTrack(dateLineJourney, 480, 'dynamic');
+    const track = buildCameraTrack(dateLineJourney, 480, 480, 'dynamic');
     const middle = cameraViewportAt(track, 0.5);
     expect(middle.maxX - middle.minX).toBeLessThan(0.05);
     const count = 2 ** middle.zoom;
@@ -88,7 +88,7 @@ describe('camera track', () => {
       [35.1796, 129.0756],
       [35.1800, 129.0800],
     ]);
-    const track = buildCameraTrack(changingJourney, 480, 'dynamic');
+    const track = buildCameraTrack(changingJourney, 480, 480, 'dynamic');
     for (let index = 1; index < track.frames.length; index += 1) {
       const previous = track.frames[index - 1];
       const current = track.frames[index];
@@ -98,10 +98,47 @@ describe('camera track', () => {
     }
   });
 
+  it.each([
+    [1_080, 1_920],
+    [1_920, 1_080],
+  ])('keeps the Android camera aspect at %i×%i', (width, height) => {
+    const track = buildCameraTrack(koreanJourney, width, height, 'dynamic');
+    expect(track.aspect).toBeCloseTo(width / height, 12);
+    for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
+      const viewport = cameraViewportAt(track, progress);
+      expect((viewport.maxX - viewport.minX) / (viewport.maxY - viewport.minY))
+        .toBeCloseTo(width / height, 12);
+      const marker = worldPositionAtProgress(koreanJourney, progress).point;
+      const normalizedX = (marker.x - viewport.minX) / (viewport.maxX - viewport.minX);
+      const normalizedY = (marker.y - viewport.minY) / (viewport.maxY - viewport.minY);
+      expect(normalizedX).toBeGreaterThanOrEqual(0.299);
+      expect(normalizedX).toBeLessThanOrEqual(0.701);
+      expect(normalizedY).toBeGreaterThanOrEqual(0.299);
+      expect(normalizedY).toBeLessThanOrEqual(0.701);
+    }
+  });
+
+  it.each([
+    [480, 480],
+    [1_080, 1_920],
+    [1_920, 1_080],
+  ])('fits the overview safe area at %i×%i', (width, height) => {
+    const viewport = overviewViewport(koreanJourney, width, height);
+    const safe = overviewSafeArea(width, height);
+    koreanJourney.worldPoints.forEach((point) => {
+      const screenX = (point.x - viewport.minX) / (viewport.maxX - viewport.minX) * width;
+      const screenY = (point.y - viewport.minY) / (viewport.maxY - viewport.minY) * height;
+      expect(screenX).toBeGreaterThanOrEqual(safe.left);
+      expect(screenX).toBeLessThanOrEqual(safe.right);
+      expect(screenY).toBeGreaterThanOrEqual(safe.top);
+      expect(screenY).toBeLessThanOrEqual(safe.bottom);
+    });
+  });
+
   it('fits the complete route below the Android-style video header', () => {
     const size = 480;
-    const viewport = overviewViewport(koreanJourney, size);
-    const safe = overviewSafeArea(size);
+    const viewport = overviewViewport(koreanJourney, size, size);
+    const safe = overviewSafeArea(size, size);
     koreanJourney.worldPoints.forEach((point) => {
       const screenX = (point.x - viewport.minX) / (viewport.maxX - viewport.minX) * size;
       const screenY = (point.y - viewport.minY) / (viewport.maxY - viewport.minY) * size;
@@ -125,7 +162,7 @@ describe('camera track', () => {
       totalDistanceKm: 0,
     };
 
-    expect(overviewViewport(denseJourney, 480)).toEqual(overviewViewport(endpointJourney, 480));
+    expect(overviewViewport(denseJourney, 480, 480)).toEqual(overviewViewport(endpointJourney, 480, 480));
   });
 
   it('builds the moving camera above browser argument limits', () => {
@@ -137,18 +174,18 @@ describe('camera track', () => {
       totalDistanceKm: 0,
     };
 
-    const track = buildCameraTrack(denseJourney, 480, 'steady');
+    const track = buildCameraTrack(denseJourney, 480, 480, 'steady');
 
     expect(track.frames).toHaveLength(481);
     expect(track.frames.every((frame) => Number.isFinite(frame.spanY))).toBe(true);
   });
 
   it('blends from the final following view to the full-route ending view', () => {
-    const track = buildCameraTrack(koreanJourney, 480, 'dynamic');
+    const track = buildCameraTrack(koreanJourney, 480, 480, 'dynamic');
     const following = cameraViewportAt(track, 1);
-    const overview = overviewViewport(koreanJourney, 480);
-    expect(blendViewport(following, overview, 0, 480)).toEqual(following);
-    const ending = blendViewport(following, overview, 1, 480);
+    const overview = overviewViewport(koreanJourney, 480, 480);
+    expect(blendViewport(following, overview, 0, 480, 480)).toEqual(following);
+    const ending = blendViewport(following, overview, 1, 480, 480);
     expect(ending.minX).toBeCloseTo(overview.minX, 12);
     expect(ending.maxX).toBeCloseTo(overview.maxX, 12);
     expect(ending.minY).toBeCloseTo(overview.minY, 12);

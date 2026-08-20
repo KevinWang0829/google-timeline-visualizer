@@ -1,7 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  base: '/google-timeline-visualizer/',
+  // Relative assets let the same build work on any GitHub Pages repository path.
+  base: './',
   build: {
     target: 'safari16.4',
   },
