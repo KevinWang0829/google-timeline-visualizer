@@ -17,6 +17,8 @@
 
 Timeline 檔案不會送出此裝置。只有在使用者明確同意後，網站才會向 CARTO 請求旅程範圍的 OpenStreetMap 圖磚；圖磚座標可能讓 CARTO 推知被瀏覽的地理區域。完整說明見網站內的「隱私說明」。
 
+公開網站使用 Cloudflare Web Analytics 取得彙總流量資料；不會將 Timeline 內容、座標、選取日期、標題或產生的影片加入分析事件。
+
 ## 本機開發
 
 需要 Node.js 24 與 pnpm 11。

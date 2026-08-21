@@ -80,11 +80,37 @@ export function worldToCanvas(
   width: number,
   height: number,
 ): [number, number] {
-  const x = unwrapNear(point.x, (viewport.minX + viewport.maxX) / 2);
   return [
-    ((x - viewport.minX) / (viewport.maxX - viewport.minX)) * width,
+    ((point.x - viewport.minX) / (viewport.maxX - viewport.minX)) * width,
     ((point.y - viewport.minY) / (viewport.maxY - viewport.minY)) * height,
   ];
+}
+
+export interface TileCanvasRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export function tileCanvasRect(
+  tileX: number,
+  tileY: number,
+  viewport: Viewport,
+  width: number,
+  height: number,
+): TileCanvasRect {
+  const tileCount = 2 ** viewport.zoom;
+  const left = ((tileX / tileCount - viewport.minX) / (viewport.maxX - viewport.minX)) * width;
+  const right = (((tileX + 1) / tileCount - viewport.minX) / (viewport.maxX - viewport.minX)) * width;
+  const top = ((tileY / tileCount - viewport.minY) / (viewport.maxY - viewport.minY)) * height;
+  const bottom = (((tileY + 1) / tileCount - viewport.minY) / (viewport.maxY - viewport.minY)) * height;
+  return {
+    left,
+    top,
+    width: right - left + 1,
+    height: bottom - top + 1,
+  };
 }
 
 interface TileCoordinate {
@@ -138,7 +164,6 @@ export function requiredTiles(viewport: Viewport): TileCoordinate[] {
         x: ((tileX % tileCount) + tileCount) % tileCount,
         y: tileY,
       });
-      if (tiles.length === 36) return tiles;
     }
   }
   return tiles;
@@ -168,19 +193,8 @@ function drawMapBackground(
       const wrappedX = ((tileX % tileCount) + tileCount) % tileCount;
       const image = tiles.get(tileKey({ zoom: viewport.zoom, x: wrappedX, y: tileY }));
       if (!image) continue;
-      const [left, top] = worldToCanvas(
-        { x: tileX / tileCount, y: tileY / tileCount },
-        viewport,
-        canvas.width,
-        canvas.height,
-      );
-      const [right, bottom] = worldToCanvas(
-        { x: (tileX + 1) / tileCount, y: (tileY + 1) / tileCount },
-        viewport,
-        canvas.width,
-        canvas.height,
-      );
-      context.drawImage(image, left, top, right - left + 1, bottom - top + 1);
+      const rect = tileCanvasRect(tileX, tileY, viewport, canvas.width, canvas.height);
+      context.drawImage(image, rect.left, rect.top, rect.width, rect.height);
     }
   }
 }
