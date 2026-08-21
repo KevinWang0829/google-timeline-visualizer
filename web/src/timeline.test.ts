@@ -74,6 +74,163 @@ describe('parseTimelineJson', () => {
     expect(points[1].instant.toISOString()).toBe('2026-01-01T00:30:00.000Z');
   });
 
+  it('keeps same-segment and standalone detail in global chronological order', () => {
+    const points = parseTimelineJson([
+      {
+        startTime: '2026-01-01T00:00:00Z',
+        endTime: '2026-01-01T01:00:00Z',
+        activity: { start: '10,10', end: '10,14' },
+        timelinePath: [
+          { point: '10,12', durationMinutesOffsetFromStartTime: 30 },
+        ],
+      },
+      {
+        startTime: '2026-01-01T00:00:00Z',
+        endTime: '2026-01-01T01:00:00Z',
+        timelinePath: [
+          { point: '20,20', durationMinutesOffsetFromStartTime: 15 },
+          { point: '20,21', durationMinutesOffsetFromStartTime: 45 },
+        ],
+      },
+    ]);
+
+    expect(points.map((point) => point.longitude)).toEqual([10, 20, 12, 21, 14]);
+  });
+
+  it('keeps outer activity endpoints around a partial detail span', () => {
+    const points = parseTimelineJson([
+      {
+        startTime: '2026-01-01T00:00:00Z',
+        endTime: '2026-01-01T01:00:00Z',
+        activity: { start: '10,10', end: '10,14' },
+      },
+      {
+        startTime: '2026-01-01T00:00:00Z',
+        endTime: '2026-01-01T01:00:00Z',
+        timelinePath: [
+          { point: '10,11', durationMinutesOffsetFromStartTime: 15 },
+          { point: '10,12', durationMinutesOffsetFromStartTime: 30 },
+          { point: '10,13', durationMinutesOffsetFromStartTime: 45 },
+        ],
+      },
+    ]);
+
+    expect(points.map((point) => point.longitude)).toEqual([10, 11, 12, 13, 14]);
+  });
+
+  it('suppresses a visit covered by a complete standalone detail span', () => {
+    const points = parseTimelineJson([
+      {
+        startTime: '2026-01-01T01:00:00Z',
+        endTime: '2026-01-01T02:00:00Z',
+        visit: { topCandidate: { placeLocation: '10,10' } },
+      },
+      {
+        startTime: '2026-01-01T00:00:00Z',
+        endTime: '2026-01-01T03:00:00Z',
+        timelinePath: [
+          { point: '20,20', durationMinutesOffsetFromStartTime: 30 },
+          { point: '20,21', durationMinutesOffsetFromStartTime: 90 },
+          { point: '20,22', durationMinutesOffsetFromStartTime: 150 },
+        ],
+      },
+    ]);
+
+    expect(points.map((point) => point.longitude)).toEqual([20, 21, 22]);
+  });
+
+  it('lets a full detail span suppress covered endpoints and visits', () => {
+    const points = parseTimelineJson([
+      {
+        startTime: '2026-01-01T01:00:00Z',
+        endTime: '2026-01-01T02:00:00Z',
+        activity: { start: '10,10', end: '10,11' },
+        visit: { topCandidate: { placeLocation: '10,12' } },
+      },
+      {
+        startTime: '2026-01-01T00:00:00Z',
+        endTime: '2026-01-01T03:00:00Z',
+        timelinePath: [
+          { point: '20,19', time: '2026-01-01T00:59:59Z' },
+          { point: '20,20', time: '2026-01-01T01:00:00Z' },
+          { point: '20,21', time: '2026-01-01T02:00:00Z' },
+          { point: '20,22', time: '2026-01-01T02:00:01Z' },
+        ],
+      },
+    ]);
+
+    expect(points.map((point) => point.longitude)).toEqual([19, 20, 21, 22]);
+  });
+
+  it('does not let a one-point standalone path suppress semantic points', () => {
+    const points = parseTimelineJson([
+      {
+        startTime: '2026-01-01T01:00:00Z',
+        endTime: '2026-01-01T02:00:00Z',
+        activity: { start: '10,10', end: '10,11' },
+      },
+      {
+        startTime: '2026-01-01T01:00:00Z',
+        endTime: '2026-01-01T02:00:00Z',
+        timelinePath: [
+          { point: '20,20', time: '2026-01-01T01:30:00Z' },
+        ],
+      },
+    ]);
+
+    expect(points.map((point) => point.longitude)).toEqual([10, 20, 11]);
+  });
+
+  it('conservatively preserves timezone-less standalone paths inside semantic wall times', () => {
+    const points = parseTimelineJson([
+      {
+        startTime: '2026-01-01T01:00:00',
+        endTime: '2026-01-01T02:00:00',
+        activity: { start: '10,10', end: '10,11' },
+      },
+      {
+        startTime: '2026-01-01T01:00:00',
+        endTime: '2026-01-01T02:00:00',
+        timelinePath: [
+          { point: '20,20', time: '2026-01-01T01:30:00' },
+        ],
+      },
+    ]);
+
+    expect(points.map((point) => point.longitude)).toEqual([10, 11, 20]);
+    expect(points.every((point) => point.timeZoneMissing)).toBe(true);
+  });
+
+  it('stably orders shuffled path offsets within a segment', () => {
+    const points = parseTimelineJson([{
+      startTime: '2026-01-01T00:00:00',
+      endTime: '2026-01-01T02:00:00',
+      timelinePath: [
+        { point: '10,19', durationMinutesOffsetFromStartTime: 90 },
+        { point: '10,11', durationMinutesOffsetFromStartTime: 10 },
+        { point: '10,16', durationMinutesOffsetFromStartTime: 60 },
+        { point: '10,17', durationMinutesOffsetFromStartTime: 60 },
+      ],
+    }]);
+
+    expect(points.map((point) => point.longitude)).toEqual([11, 16, 17, 19]);
+  });
+
+  it('stably orders shuffled timezone-aware absolute path times', () => {
+    const points = parseTimelineJson([{
+      startTime: '2026-01-01T00:00:00Z',
+      endTime: '2026-01-01T02:00:00Z',
+      timelinePath: [
+        { point: '10,19', time: '2026-01-01T01:30:00+00:00' },
+        { point: '10,11', time: '2026-01-01T00:10:00+00:00' },
+        { point: '10,16', time: '2026-01-01T01:00:00+00:00' },
+        { point: '10,17', time: '2026-01-01T01:00:00+00:00' },
+      ],
+    }]);
+
+    expect(points.map((point) => point.longitude)).toEqual([11, 16, 17, 19]);
+  });
+
   it('sorts, deduplicates, lists months, and selects a month range', () => {
     const duplicate = { ...directExport[0] };
     const points = parseTimelineJson([directExport[1], directExport[0], duplicate]);

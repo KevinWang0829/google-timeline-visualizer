@@ -82,7 +82,6 @@ const TILE_ZOOM_HYSTERESIS = 0.15;
 const MIN_TILE_ZOOM = 2;
 const MAX_TILE_ZOOM = 15;
 const MAX_VIEWPORT_SPAN = 0.72;
-const MAX_OVERVIEW_VIEWPORT_SPAN = 1.25;
 const MIN_VIEWPORT_SPAN = 0.0003;
 const OVERVIEW_PADDING = 1.22;
 const OVERVIEW_SIDE_INSET = 34;
@@ -272,12 +271,8 @@ export function overviewViewport(journey: CameraJourney, width: number, height: 
   const safeWidth = Math.max(1, safe.right - safe.left);
   const safeHeight = Math.max(1, safe.bottom - safe.top);
   const worldPerPixel = Math.max(contentSpanX / safeWidth, contentSpanY / safeHeight) * OVERVIEW_PADDING;
-  const spanX = Math.max(worldPerPixel * width, MIN_VIEWPORT_SPAN);
-  const spanY = clamp(
-    worldPerPixel * height,
-    MIN_VIEWPORT_SPAN,
-    MAX_OVERVIEW_VIEWPORT_SPAN,
-  );
+  const spanX = worldPerPixel * width;
+  const spanY = worldPerPixel * height;
   const viewportMinX = contentCenterX - ((safe.left + safe.right) / 2) * worldPerPixel;
   let viewportMinY = contentCenterY - ((safe.top + safe.bottom) / 2) * worldPerPixel;
   if (spanY <= 1) viewportMinY = clamp(viewportMinY, 0, 1 - spanY);
@@ -298,26 +293,26 @@ export function blendViewport(
   height: number,
 ): Viewport {
   const amount = clamp(fraction, 0, 1);
+  if (amount <= 0) return from;
+  if (amount >= 1) return to;
   const aspect = width / Math.max(1, height);
   const fromCenterX = (from.minX + from.maxX) / 2;
-  const toCenterX = unwrapNear((to.minX + to.maxX) / 2, fromCenterX);
+  const toCenterX = (to.minX + to.maxX) / 2;
   const centerX = fromCenterX + (toCenterX - fromCenterX) * amount;
   const centerY = (from.minY + from.maxY) / 2
     + ((to.minY + to.maxY) / 2 - (from.minY + from.maxY) / 2) * amount;
   const fromSpanY = Math.max(from.maxY - from.minY, MIN_VIEWPORT_SPAN);
   const toSpanY = Math.max(to.maxY - to.minY, MIN_VIEWPORT_SPAN);
-  const spanY = clamp(
-    Math.exp(Math.log(fromSpanY) + (Math.log(toSpanY) - Math.log(fromSpanY)) * amount),
+  const spanY = Math.max(
     MIN_VIEWPORT_SPAN,
-    MAX_OVERVIEW_VIEWPORT_SPAN,
+    Math.exp(Math.log(fromSpanY) + (Math.log(toSpanY) - Math.log(fromSpanY)) * amount),
   );
   const spanX = spanY * aspect;
-  const adjustedCenterY = clampCenterY(centerY, spanY);
   return {
     minX: centerX - spanX / 2,
     maxX: centerX + spanX / 2,
-    minY: adjustedCenterY - spanY / 2,
-    maxY: adjustedCenterY + spanY / 2,
+    minY: centerY - spanY / 2,
+    maxY: centerY + spanY / 2,
     zoom: clamp(Math.floor(Math.log2(Math.max(1, width) / (256 * spanX))), MIN_TILE_ZOOM, MAX_TILE_ZOOM),
   };
 }

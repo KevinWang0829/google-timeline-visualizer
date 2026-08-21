@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   overlayCard,
   overlayStatusLabel,
+  requiredTiles,
+  tileCanvasRect,
   trailDistanceRanges,
   worldToCanvas,
 } from './renderer';
@@ -13,10 +15,43 @@ describe('Android-style renderer geometry', () => {
     expect(worldToCanvas({ x: 1, y: 0.5 }, viewport, 1_920, 1_080)).toEqual([960, 540]);
   });
 
-  it('unwraps points next to the viewport across the date line', () => {
+  it('maps an already-unwrapped point next to the viewport across the date line', () => {
     const viewport = { minX: 0.9, maxX: 1.1, minY: 0, maxY: 1, zoom: 4 };
-    const [x] = worldToCanvas({ x: 0.02, y: 0.5 }, viewport, 1_000, 500);
+    const [x] = worldToCanvas({ x: 1.02, y: 0.5 }, viewport, 1_000, 500);
     expect(x).toBeCloseTo(600, 9);
+  });
+
+  it('keeps an unwrapped route continuous across the date line', () => {
+    const viewport = { minX: -0.05, maxX: 0.05, minY: 0, maxY: 1, zoom: 4 };
+    const [before] = worldToCanvas(
+      { x: -0.01, y: 0.5 },
+      viewport,
+      1_000,
+      500,
+    );
+    const [after] = worldToCanvas(
+      { x: 0.01, y: 0.5 },
+      viewport,
+      1_000,
+      500,
+    );
+    expect(before).toBeCloseTo(400, 9);
+    expect(after).toBeCloseTo(600, 9);
+  });
+
+  it('keeps low-zoom portrait tile rectangles positive across a world edge', () => {
+    const viewport = { minX: 0.15, maxX: 0.83, minY: -0.104, maxY: 1.104, zoom: 2 };
+    const rect = tileCanvasRect(3, 1, viewport, 1_080, 1_920);
+    expect(viewport.maxX - viewport.minX).toBeGreaterThan(0.5);
+    expect(rect.width).toBeGreaterThan(0);
+    expect(rect.height).toBeGreaterThan(0);
+  });
+
+  it('returns every visible tile when a wide overview needs more than 36', () => {
+    const viewport = { minX: -0.75, maxX: 1.75, minY: 0, maxY: 1, zoom: 2 };
+    const tiles = requiredTiles(viewport);
+    expect(tiles.length).toBe(44);
+    expect(tiles.every((tile) => tile.x >= 0 && tile.x < 4)).toBe(true);
   });
 
   it('uses the 2.5-second trail window and Android 45/30/25 split', () => {

@@ -60,6 +60,19 @@ interface ParsedInstant {
 interface ParsedTimelineSegment {
   anchor: Date | null;
   points: GeoPoint[];
+  standalonePath: boolean;
+  hasOwnPath: boolean;
+}
+
+interface TimeInterval {
+  start: number;
+  end: number;
+}
+
+interface ParsedPathPoint {
+  point: GeoPoint;
+  offsetMinutes: number | null;
+  sourceIndex: number;
 }
 
 const SEGMENT_DIRECTION_SIGNAL_MS = 36 * 60 * 60 * 1000;
@@ -102,17 +115,82 @@ function parseOffsetInstant(startValue: unknown, endValue: unknown, offsetValue:
   return instant;
 }
 
-function addPoint(output: GeoPoint[], time: unknown, coordinate: unknown): void {
+function addPoint(output: GeoPoint[], time: unknown, coordinate: unknown): GeoPoint | null {
   const parsedTime = parseInstant(time);
   const parsed = parseCoordinate(coordinate);
-  if (!parsedTime || !parsed) return;
-  output.push({
+  if (!parsedTime || !parsed) return null;
+  const point: GeoPoint = {
     instant: parsedTime.instant,
     latitude: parsed[0],
     longitude: parsed[1],
     recordedDate: parsedTime.recordedDate,
     timeZoneMissing: parsedTime.timeZoneMissing,
-  });
+  };
+  output.push(point);
+  return point;
+}
+
+function orderPathPoints(points: ParsedPathPoint[]): GeoPoint[] {
+  const allTimezoneAware = points.every(({ point }) => !point.timeZoneMissing);
+  const allHaveOffsets = points.every(({ offsetMinutes }) => offsetMinutes !== null);
+  if (!allTimezoneAware && !allHaveOffsets) return points.map(({ point }) => point);
+
+  return [...points]
+    .sort((left, right) => {
+      const leftOrder = allTimezoneAware ? left.point.instant.getTime() : left.offsetMinutes!;
+      const rightOrder = allTimezoneAware ? right.point.instant.getTime() : right.offsetMinutes!;
+      return leftOrder - rightOrder || left.sourceIndex - right.sourceIndex;
+    })
+    .map(({ point }) => point);
+}
+
+function mergeIntervals(intervals: TimeInterval[]): TimeInterval[] {
+  const sorted = [...intervals].sort((left, right) => left.start - right.start);
+  const merged: TimeInterval[] = [];
+  for (const interval of sorted) {
+    const previous = merged.at(-1);
+    if (!previous || interval.start > previous.end) {
+      merged.push({ ...interval });
+    } else if (interval.end > previous.end) {
+      previous.end = interval.end;
+    }
+  }
+  return merged;
+}
+
+function isCovered(point: GeoPoint, intervals: TimeInterval[]): boolean {
+  if (point.timeZoneMissing) return false;
+  const timestamp = point.instant.getTime();
+  let low = 0;
+  let high = intervals.length - 1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const interval = intervals[middle];
+    if (timestamp < interval.start) high = middle - 1;
+    else if (timestamp > interval.end) low = middle + 1;
+    else return true;
+  }
+  return false;
+}
+
+function preferStandaloneDetail(segments: ParsedTimelineSegment[]): ParsedTimelineSegment[] {
+  const detailCoverage = mergeIntervals(segments.flatMap((segment): TimeInterval[] => {
+    if (
+      !segment.standalonePath
+      || segment.points.length < 2
+      || segment.points.some((point) => point.timeZoneMissing)
+    ) return [];
+    return [{
+      start: segment.points[0].instant.getTime(),
+      end: segment.points.at(-1)!.instant.getTime(),
+    }];
+  }));
+
+  for (const segment of segments) {
+    if (segment.standalonePath || segment.hasOwnPath) continue;
+    segment.points = segment.points.filter((point) => !isCovered(point, detailCoverage));
+  }
+  return segments.filter((segment) => segment.points.length > 0);
 }
 
 function normalizeSegmentDirection(segments: ParsedTimelineSegment[]): ParsedTimelineSegment[] {
@@ -164,47 +242,65 @@ export function parseTimelineJson(data: unknown): GeoPoint[] {
     const startTime = rawSegment.startTime;
     const endTime = rawSegment.endTime;
     const segmentPoints: GeoPoint[] = [];
+    let semanticPointAdded = false;
+    let parsedPathPointCount = 0;
 
     if (isObject(rawSegment.activity)) {
-      addPoint(segmentPoints, startTime, rawSegment.activity.start);
+      semanticPointAdded = addPoint(segmentPoints, startTime, rawSegment.activity.start) !== null
+        || semanticPointAdded;
     }
 
     if (isObject(rawSegment.visit) && isObject(rawSegment.visit.topCandidate)) {
-      addPoint(segmentPoints, startTime, rawSegment.visit.topCandidate.placeLocation);
+      semanticPointAdded = addPoint(segmentPoints, startTime, rawSegment.visit.topCandidate.placeLocation) !== null
+        || semanticPointAdded;
     }
 
     if (Array.isArray(rawSegment.timelinePath)) {
-      for (const rawPathPoint of rawSegment.timelinePath) {
+      const pathPoints: ParsedPathPoint[] = [];
+      for (const [sourceIndex, rawPathPoint] of rawSegment.timelinePath.entries()) {
         if (!isObject(rawPathPoint)) continue;
         const absolute = parseInstant(rawPathPoint.time);
-        const offsetInstant = parseOffsetInstant(startTime, endTime, rawPathPoint.durationMinutesOffsetFromStartTime);
+        const offsetMinutes = parseOffsetMinutes(rawPathPoint.durationMinutesOffsetFromStartTime);
+        const offsetInstant = parseOffsetInstant(startTime, endTime, offsetMinutes);
         const coordinate = parseCoordinate(rawPathPoint.point);
         if ((absolute || offsetInstant) && coordinate) {
           const segmentStart = absolute ? null : parseInstant(startTime);
-          segmentPoints.push({
-            instant: absolute?.instant ?? offsetInstant!,
-            latitude: coordinate[0],
-            longitude: coordinate[1],
-            recordedDate: absolute?.recordedDate
-              ?? (segmentStart?.timeZoneMissing ? offsetInstant?.toISOString().slice(0, 10) : undefined),
-            timeZoneMissing: absolute?.timeZoneMissing ?? segmentStart?.timeZoneMissing ?? false,
+          pathPoints.push({
+            point: {
+              instant: absolute?.instant ?? offsetInstant!,
+              latitude: coordinate[0],
+              longitude: coordinate[1],
+              recordedDate: absolute?.recordedDate
+                ?? (segmentStart?.timeZoneMissing ? offsetInstant?.toISOString().slice(0, 10) : undefined),
+              timeZoneMissing: absolute?.timeZoneMissing ?? segmentStart?.timeZoneMissing ?? false,
+            },
+            offsetMinutes,
+            sourceIndex,
           });
         }
       }
+      parsedPathPointCount = pathPoints.length;
+      segmentPoints.push(...orderPathPoints(pathPoints));
     }
 
     if (isObject(rawSegment.activity)) {
-      addPoint(segmentPoints, endTime, rawSegment.activity.end);
+      semanticPointAdded = addPoint(segmentPoints, endTime, rawSegment.activity.end) !== null
+        || semanticPointAdded;
     }
     if (segmentPoints.length > 0) {
       parsedSegments.push({
         anchor: parseInstant(startTime)?.instant ?? segmentPoints[0].instant,
         points: segmentPoints,
+        standalonePath: parsedPathPointCount > 0 && !semanticPointAdded,
+        hasOwnPath: parsedPathPointCount > 0 && semanticPointAdded,
       });
     }
   }
 
-  const points = normalizeSegmentDirection(parsedSegments).flatMap((segment) => segment.points);
+  // Some exports append a detailed path history alongside coarse activities and
+  // visits. Keep that path in place and suppress only covered semantic anchors.
+  const reconciled = preferStandaloneDetail(parsedSegments);
+  const points = normalizeSegmentDirection(reconciled).flatMap((segment) => segment.points);
   const unique = new Map<string, GeoPoint>();
   for (const point of points) {
     const key = `${point.instant.getTime()}:${point.latitude}:${point.longitude}`;

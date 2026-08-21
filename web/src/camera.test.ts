@@ -135,6 +135,34 @@ describe('camera track', () => {
     });
   });
 
+  it.each([
+    [1_080, 1_920],
+    [1_920, 1_080],
+  ])('keeps a world-spanning overview undistorted and inside the safe area at %i×%i', (width, height) => {
+    const worldSpanningJourney = {
+      worldPoints: [
+        { x: 0, y: 0.42 },
+        { x: 0.5, y: 0.58 },
+        { x: 1, y: 0.46 },
+      ],
+      cumulativeDistanceKm: [0, 10_000, 20_000],
+      totalDistanceKm: 20_000,
+    };
+    const viewport = overviewViewport(worldSpanningJourney, width, height);
+    const safe = overviewSafeArea(width, height);
+
+    expect((viewport.maxX - viewport.minX) / (viewport.maxY - viewport.minY))
+      .toBeCloseTo(width / height, 12);
+    worldSpanningJourney.worldPoints.forEach((point) => {
+      const screenX = (point.x - viewport.minX) / (viewport.maxX - viewport.minX) * width;
+      const screenY = (point.y - viewport.minY) / (viewport.maxY - viewport.minY) * height;
+      expect(screenX).toBeGreaterThanOrEqual(safe.left);
+      expect(screenX).toBeLessThanOrEqual(safe.right);
+      expect(screenY).toBeGreaterThanOrEqual(safe.top);
+      expect(screenY).toBeLessThanOrEqual(safe.bottom);
+    });
+  });
+
   it('fits the complete route below the Android-style video header', () => {
     const size = 480;
     const viewport = overviewViewport(koreanJourney, size, size);
@@ -190,5 +218,37 @@ describe('camera track', () => {
     expect(ending.maxX).toBeCloseTo(overview.maxX, 12);
     expect(ending.minY).toBeCloseTo(overview.minY, 12);
     expect(ending.maxY).toBeCloseTo(overview.maxY, 12);
+  });
+
+  it('reaches a multi-world unwrapped overview without shifting it by one world', () => {
+    const width = 1_080;
+    const height = 1_920;
+    const multiWorldJourney = {
+      worldPoints: [
+        { x: 0.1, y: 0.45 },
+        { x: 0.8, y: 0.55 },
+        { x: 1.4, y: 0.50 },
+      ],
+      cumulativeDistanceKm: [0, 10_000, 20_000],
+      totalDistanceKm: 20_000,
+    };
+    const overview = overviewViewport(multiWorldJourney, width, height);
+    const following = {
+      minX: 1.35,
+      maxX: 1.45,
+      minY: 0.4,
+      maxY: 0.4 + 0.1 * height / width,
+      zoom: 4,
+    };
+
+    expect(blendViewport(following, overview, 1, width, height)).toEqual(overview);
+    const middle = blendViewport(following, overview, 0.5, width, height);
+    expect((middle.minX + middle.maxX) / 2).toBeLessThan(1.4);
+    expect((middle.minY + middle.maxY) / 2).toBeCloseTo(
+      ((following.minY + following.maxY) / 2 + (overview.minY + overview.maxY) / 2) / 2,
+      12,
+    );
+    expect((middle.maxX - middle.minX) / (middle.maxY - middle.minY))
+      .toBeCloseTo(width / height, 12);
   });
 });
